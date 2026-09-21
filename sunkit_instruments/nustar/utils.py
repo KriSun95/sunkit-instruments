@@ -12,9 +12,9 @@ def regroup_any_array(data:np.ndarray|u.Quantity, old_bins:np.ndarray|u.Quantity
 
     Parameters
     ----------
-    data, old_bins, new_bins : `~numpy.ndarray`
+    data, old_bins, new_bins : `~numpy.ndarray` | `~astropy.units.Quantity`
             Array of the data, current bins for the data, and new bins
-            for the data. Shape of the bin arrays should be `(N+1, 2)`
+            for the data. Shape of the bin arrays should be `(N, 2)`
             where `N` is the length of `data`.
 
     combine_by : string
@@ -52,7 +52,7 @@ def regroup_any_array(data:np.ndarray|u.Quantity, old_bins:np.ndarray|u.Quantity
     return np.array(new_binned_data) if du is None else np.array(new_binned_data) << du
 
 def rebin_rmf(
-    matrix:np.ndarray|u.Quantity, old_output_bins:np.ndarray|u.Quantity=None, new_output_bins:np.ndarray|u.Quantity=None, old_input_bins:np.ndarray|u.Quantity=None, new_input_bins:np.ndarray|u.Quantity=None
+    matrix:np.ndarray|u.Quantity, old_output_bins:np.ndarray|u.Quantity|None=None, new_output_bins:np.ndarray|u.Quantity|None=None, old_input_bins:np.ndarray|u.Quantity|None=None, new_input_bins:np.ndarray|u.Quantity|None=None
 ):
     """Rebins the photon and/or count channels of the redistribution matrix
     if needed.
@@ -63,14 +63,14 @@ def rebin_rmf(
 
     Parameters
     ----------
-    matrix : 2d array
+    matrix : `~numpy.ndarray` | `~astropy.units.Quantity`
             Redistribution matrix.
 
-    old_output_bins, new_output_bins : 1d arrays
+    old_output_bins, new_output_bins : `~numpy.ndarray` | `~astropy.units.Quantity`
             The old count channel binning and the new binning to for the
             redistribution matrix columns (sum columns).
 
-    old_input_bins, new_input_bins : 1d arrays
+    old_input_bins, new_input_bins : `~numpy.ndarray` | `~astropy.units.Quantity`
             The old photon channel binning and the new binning to for the
             redistribution matrix columns (average rows).
 

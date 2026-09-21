@@ -328,7 +328,7 @@ class NustarSpectrum:
         """A function to check updated PHA information."""
         # check the shapes match at least
         pha_shape = np.shape(self._spectrum_counts)
-        if pha_shape[0]!=np.shape(self.spectrum_axis_edges)[0]:
+        if pha_shape[0]!=np.shape(self._spectrum_axis_edges)[0]:
             warnings.warn("Count axis length of PHA does not match PHA length.")
 
     def _set_pha(self, pha:u.Quantity):
@@ -507,7 +507,7 @@ class NustarSpectrum:
 
         self.standard_unit_check("Redistribution matrix",
                                  self._redistribution_matrix.unit,
-                                 "rmf")
+                                 "rdm")
 
     def _set_rmf_input_axis(self, input_axis:u.Quantity):
         """Updates the redistribution matrix input (rows) bin edges."""

@@ -44,6 +44,10 @@ def _NustarSpectrum_inputs_setup0():
     fchan = [[0, 2], [0], [1], [2]]
     nchan = [[1, 1], [1], [1], [2]]
     data = [[10, 20], [30], [40], [15, 16]]
+    expected_rmf = np.array([[10.,  0., 20.,  0.],
+                             [30.,  0.,  0.,  0.],
+                             [ 0., 40.,  0.,  0.],
+                             [ 0.,  0., 15., 16.]]) << (u.ct/u.ph)
     return {"chan":chan,
             "counts":counts,
             "lvt":lvt,
@@ -58,14 +62,19 @@ def _NustarSpectrum_inputs_setup0():
             "ngrp":ngrp,
             "fchan":fchan,
             "nchan":nchan,
-            "data":data}
+            "data":data,
+            "expected_rmf":expected_rmf,
+            }
 
 def _NustarSpectrum_setup0():
     """Return a `NustarSpectrum` object with the file functions re-defined."""
     setup = _NustarSpectrum_inputs_setup0()
-    obs_func = lambda *args: (setup["chan"], setup["counts"], setup["lvt"])
-    eff_func = lambda *args: (setup["arf_elo"], setup["arf_ehi"], setup["arf_resp"])
-    res_func = lambda *args: ((setup["rmf_chan"], setup["rmf_emin"], setup["rmf_emax"]), (setup["rmf_elo"], setup["rmf_ehi"], setup["ngrp"], setup["fchan"], setup["nchan"], setup["data"]))
+    def obs_func(*args):
+        return (setup["chan"], setup["counts"], setup["lvt"])
+    def eff_func(*args): 
+        return (setup["arf_elo"], setup["arf_ehi"], setup["arf_resp"])
+    def res_func(*args): 
+        return ((setup["rmf_chan"], setup["rmf_emin"], setup["rmf_emax"]), (setup["rmf_elo"], setup["rmf_ehi"], setup["ngrp"], setup["fchan"], setup["nchan"], setup["data"]))
 
     return _init_NustarSpectrum(obs_func, eff_func, res_func)
 
@@ -92,27 +101,86 @@ def test_NustarSpectrum_assignment():
                     "fchan":setup["fchan"],
                     "nchan":setup["nchan"],
                     "matrix":setup["data"]}
-    expected_rmf = np.array([[10.,  0., 20.,  0.],
-                             [30.,  0.,  0.,  0.],
-                             [ 0., 40.,  0.,  0.],
-                             [ 0.,  0., 15., 16.]]) << (u.ct/u.ph)
     assert np.all(nu_spec._redistribution_matrix_ouput_channel_number==setup["rmf_chan"])
     assert np.all(nu_spec._redistribution_matrix_input_axis_edges==rmf_input_edges)
     assert np.all(nu_spec._redistribution_matrix_output_axis_edges==rmf_output_edges)
     for (k, v) in rmf_aux_info.items():
         assert np.all(nu_spec._redistribution_matrix_aux_info[k]==v)
-    assert np.all(nu_spec._redistribution_matrix==expected_rmf)
+    assert np.all(nu_spec._redistribution_matrix==setup["expected_rmf"])
     # SRM construction and assignment
-    expected_srm = (setup["arf_resp"][:, None] * expected_rmf)
+    expected_srm = (setup["arf_resp"][:, None] * setup["expected_rmf"])
     assert np.all(nu_spec._spectral_response_matrix_input_axis_edges==rmf_input_edges)
     assert np.all(nu_spec._spectral_response_matrix_output_axis_edges==rmf_output_edges)
     assert np.all(nu_spec._spectral_response_matrix==expected_srm)
 
-def test_NustarSpectrum_spectrum_object():
-    """Test `~NustarSpectrum.spectrum_object`."""
-
 def test_NustarSpectrum_get_functions():
     """Test all `NustarSpectrum` functions that get data."""
+    setup = _NustarSpectrum_inputs_setup0()
+    nu_spec = _NustarSpectrum_setup0()
+
+    # check PHA information returned is correct
+    pha_dict = nu_spec.get_pha_info()
+    # check ARF information returned is correct
+    arf_dict = nu_spec.get_arf_info()
+    # check RMF information returned is correct
+    rmf_dict = nu_spec.get_rmf_info()
+    rmf_dict_aux = nu_spec.get_rmf_info(include_auxilliray_info=True)
+    # check SRM information returned is correct
+    srm_dict = nu_spec.get_srm_info()
+
+def test_NustarSpectrum_spectrum_object():
+    """Test `~NustarSpectrum.spectrum_object`."""
+    setup = _NustarSpectrum_inputs_setup0()
+    nu_spec = _NustarSpectrum_setup0()
+
+    spec_obj_get = nu_spec.get_spec_obj()
+    spec_obj_att = nu_spec.spectrum_object
 
 def test_NustarSpectrum_rebin_functions():
     """Test all `NustarSpectrum` functions that rebin data."""
+    setup = _NustarSpectrum_inputs_setup0()
+    nu_spec = _NustarSpectrum_setup0()
+    # let's just turn everything into one bin
+    _new_input_axis_edges = np.array([[setup["arf_elo"][0].value, setup["arf_ehi"][-1].value]]) << u.keV
+    _new_output_axis_edges = np.array([[setup["rmf_emin"][0].value, setup["rmf_emax"][-1].value]]) << u.keV
+
+    # check the individual rebin functions that only return the new arrays
+    with warnings.catch_warnings(action="ignore"):
+        # PHA rebinning
+        new_axis_edges_pha, new_pha = nu_spec.rebin_pha_info(new_axis_edges=_new_output_axis_edges)
+        # ARF rebinning
+        new_axis_edges_arf, new_arf = nu_spec.rebin_arf_info(new_axis_edges=_new_input_axis_edges)
+        # RMF rebinning
+        new_input_axis_edges_rmf, new_output_axis_edges_rmf, new_rmf = nu_spec.rebin_rmf_info(new_input_axis_edges=_new_input_axis_edges, new_output_axis_edges=_new_output_axis_edges)
+        # SRM rebinning, this rebins ARF and RMF separately then recombines
+        new_input_axis_edges_srm, new_output_axis_edges_srm, new_arf_srm, new_rmf_srm, new_srm = nu_spec.rebin_srm_info(new_input_axis_edges=_new_input_axis_edges, new_output_axis_edges=_new_output_axis_edges)
+
+    assert np.all(new_axis_edges_pha==_new_output_axis_edges)
+    assert np.all(new_pha==np.sum(setup["counts"]))
+    assert np.all(new_axis_edges_arf==_new_input_axis_edges)
+    assert np.all(new_arf==np.mean(setup["arf_resp"]))
+    assert np.all(new_input_axis_edges_rmf==_new_input_axis_edges)
+    assert np.all(new_output_axis_edges_rmf==_new_output_axis_edges)
+    assert np.all(new_rmf==np.sum(np.mean(setup["expected_rmf"], axis=0))) # mean over rows, sum columns
+
+    expected_srm = (new_arf_srm[:, None] * new_rmf_srm)
+    assert np.all(new_input_axis_edges_srm==_new_input_axis_edges)
+    assert np.all(new_output_axis_edges_srm==_new_output_axis_edges)
+    assert np.all(new_arf==new_arf_srm)
+    assert np.all(new_rmf==new_rmf_srm)
+    assert np.all(new_srm==expected_srm)
+
+    # rebin all info; this sets the class attributes and does not return anything
+    nu_spec.rebin_info(new_input_axis_edges=_new_input_axis_edges, new_output_axis_edges=_new_output_axis_edges)
+    pha_dict = nu_spec.get_pha_info()
+    arf_dict = nu_spec.get_arf_info()
+    rmf_dict = nu_spec.get_rmf_info()
+    srm_dict = nu_spec.get_srm_info()
+    for (v,e) in zip(pha_dict.values(), [new_axis_edges_pha, new_pha, setup["lvt"]]):
+        assert np.all(v==e)
+    for (v,e) in zip(arf_dict.values(), [new_axis_edges_arf, new_arf]):
+        assert np.all(v==e)
+    for (v,e) in zip(rmf_dict.values(), [new_input_axis_edges_rmf, new_output_axis_edges_rmf, new_rmf]):
+        assert np.all(v==e)
+    for (v,e) in zip(srm_dict.values(), [new_input_axis_edges_srm, new_output_axis_edges_srm, new_srm]):
+        assert np.all(v==e)
